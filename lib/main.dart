@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart'; // BUILDER 2.0 FIXED: Missing import added
+import 'package:path_provider/path_provider.dart';
 import 'db_helper.dart';
 
 void main() async {
@@ -27,7 +27,7 @@ class RealEstateApp extends StatelessWidget {
   }
 }
 
-// --- UTILS (Formatting, TimeAgo, Phone Dialer) ---
+// --- UTILS ---
 class Utils {
   static String formatNum(dynamic numStr) {
     if (numStr == null || numStr.toString().isEmpty) return '0';
@@ -52,7 +52,7 @@ class Utils {
     List<String> nums = phones.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     if (nums.length == 1) {
       launchUrl(Uri.parse('tel:${nums[0]}'));
-    } else {
+    } else if (nums.isNotEmpty) {
       showModalBottomSheet(
         context: context,
         builder: (c) => ListView(
@@ -130,7 +130,7 @@ class _DashboardState extends State<Dashboard> {
   );
 }
 
-// --- DYNAMIC DROPDOWN COMPONENT ---
+// --- DYNAMIC DROPDOWN ---
 class DynamicDropdown extends StatefulWidget {
   final String label; final String? val; final List<String> opts; final Function(String) onChanged; final String table; final String col;
   const DynamicDropdown({Key? key, required this.label, this.val, required this.opts, required this.onChanged, required this.table, required this.col}) : super(key: key);
@@ -256,7 +256,7 @@ class _PropFormState extends State<PropForm> {
       DynamicDropdown(label: 'Status', val: _st, opts: const ['Available', 'Pending', 'Sold'], table: 'properties', col: 'status', onChanged: (v)=>_st=v), const SizedBox(height:10),
       Row(children: [Expanded(child: TextField(controller: _ap, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Ask Price*', border: OutlineInputBorder(), isDense:true))), const SizedBox(width:5), Expanded(child: TextField(controller: _bp, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Bottom Price', border: OutlineInputBorder(), isDense:true)))]), const SizedBox(height:10),
       DynamicDropdown(label: 'Location', val: _loc, opts: const ['ကောင်ရွေးရွာ', 'နားဘောင်ရွာ'], table: 'properties', col: 'location', onChanged: (v)=>_loc=v), const SizedBox(height:10),
-      Row(children: [Expanded(child: TextField(controller: _ml, decoration: const InputDecoration(labelText: 'Map Link', border: OutlineInputBorder(), isDense:true))), IconButton(icon: const Icon(Icons.map, color:Colors.teal), onPressed: ()=>launchUrl(Uri.parse(_ml.text)))]), const SizedBox(height:10),
+      Row(children: [Expanded(child: TextField(controller: _ml, decoration: const InputDecoration(labelText: 'Map Link', border: OutlineInputBorder(), isDense:true))), IconButton(icon: const Icon(Icons.map, color:Colors.teal), onPressed: (){ if(_ml.text.isNotEmpty) launchUrl(Uri.parse(_ml.text)); })]), const SizedBox(height:10),
       TextField(controller: _rm, maxLines: 2, decoration: const InputDecoration(labelText: 'Remark', border: OutlineInputBorder(), isDense:true)), const SizedBox(height:10),
       ElevatedButton.icon(icon: const Icon(Icons.photo), label: const Text('Pick Images (<5MB)'), onPressed: _pick),
       if (_imgs.isNotEmpty) SizedBox(height: 80, child: ListView(scrollDirection: Axis.horizontal, children: _imgs.map((p)=>Padding(padding: const EdgeInsets.only(right:5), child: Stack(children: [Image.file(File(p), width: 80, height: 80, fit: BoxFit.cover), Positioned(right:0,child: InkWell(onTap:()=>setState(()=>_imgs.remove(p)), child: const Icon(Icons.cancel, color: Colors.red)))]))).toList())),
@@ -305,4 +305,4 @@ class _OwnerFormState extends State<OwnerForm> {
     Navigator.pop(context, true);
   }
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Owner Form')), body: ListView(padding: const EdgeInsets.all(12), children: [
-    TextField(controller: _n, decoration: const InputDecoration(label
+    TextField(controller: _n, decoration: const InputDecoration(labelText: 'Name*', border: OutlineInputBorder
