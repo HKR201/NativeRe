@@ -30,8 +30,8 @@ jobs:
           cp pubspec.yaml tkr_erp/
           rm -rf tkr_erp/lib
           cp -r lib tkr_erp/
-          # FORCE INJECT INTERNET PERMISSION FOR CHINA ROM
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' tkr_erp/android/app/src/main/AndroidManifest.xml
+          # SAFE MANIFEST INJECTION
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>\n    <application/g' tkr_erp/android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies
         working-directory: ./tkr_erp
