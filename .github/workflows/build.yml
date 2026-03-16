@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch: # Allow manual trigger (Button နှိပ်ပြီး Build လုပ်နိုင်ရန်)
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,15 +24,29 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
+      - name: Builder 2.0 Smart Injector (Generate Android Wrapper)
+        run: |
+          # ၁။ Cloud ပေါ်တွင် Flutter Project အခွံအသစ် တည်ဆောက်ခြင်း
+          flutter create tkr_erp
+          
+          # ၂။ သင့်၏ pubspec.yaml ဖြင့် အစားထိုးခြင်း
+          cp pubspec.yaml tkr_erp/
+          
+          # ၃။ Default Code များကိုဖျက်၍ သင့်၏ lib ဖိုင်များဖြင့် အစားထိုးခြင်း
+          rm -rf tkr_erp/lib
+          cp -r lib tkr_erp/
+          
       - name: Get Dependencies
+        working-directory: ./tkr_erp
         run: flutter pub get
 
       - name: Build APK (Release)
+        working-directory: ./tkr_erp
         run: flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: RealEstate-Release-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: tkr_erp/build/app/outputs/flutter-apk/app-release.apk
           
