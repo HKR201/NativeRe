@@ -2,7 +2,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io';
 
 class DBHelper {
   static final DBHelper instance = DBHelper._init();
@@ -12,6 +11,11 @@ class DBHelper {
   // သင့်ရဲ့ Supabase Keys များ
   final String supabaseUrl = 'https://btwbbjijrbyxbjlhtpqf.supabase.co';
   final String supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0d2JiamlqcmJ5eGJqbGh0cHFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzODIwNjEsImV4cCI6MjA4ODk1ODA2MX0.jkVvPfaEvhhWDg7zTdjKnll5gDqeyNBy3Eli4cxmbhQ';
+
+  // Builder 2.0 Security & Stability: Define exact local columns to prevent sync crashes
+  final List<String> validPropCols = ['title', 'property_type', 'owner_name', 'land_type', 'house_type', 'dim_front', 'dim_back', 'dim_left', 'dim_right', 'status', 'asking_price', 'bottom_price', 'location', 'map_link', 'image_path', 'remark', 'is_synced', 'is_deleted'];
+  final List<String> validBuyerCols = ['name', 'phone', 'budget', 'requirement', 'location', 'remark', 'is_synced', 'is_deleted'];
+  final List<String> validOwnerCols = ['name', 'phone', 'remark', 'is_synced', 'is_deleted'];
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -51,7 +55,7 @@ class DBHelper {
   // --- CRUD Operations ---
   Future<int> insert(String table, Map<String, dynamic> data) async {
     final db = await instance.database;
-    data['is_synced'] = 0; // Local မှာထည့်တိုင်း 0 အဖြစ်မှတ်မယ်
+    data['is_synced'] = 0;
     return await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -71,7 +75,7 @@ class DBHelper {
     return await db.update(table, {'is_deleted': 1, 'is_synced': 0}, where: 'id = ?', whereArgs: [id]);
   }
 
-  // --- SUPABASE SYNC LOGIC (Optimization Included) ---
+  // --- SUPABASE SYNC LOGIC (Bulletproof against Schema Changes) ---
   Future<String> syncData() async {
     try {
       final db = await instance.database;
@@ -92,15 +96,13 @@ class DBHelper {
         for (var row in unsynced) {
           Map<String, dynamic> data = Map.from(row);
           int localId = data.remove('id');
-          int isDeleted = data.remove('is_deleted');
+          int isDeleted = data.remove('is_deleted') ?? 0;
           data.remove('is_synced');
 
           if (isDeleted == 1) {
-            // Delete in cloud based on specific fields (e.g., title or name)
             String queryParam = table == 'properties' ? 'title=eq.${data['title']}' : 'name=eq.${data['name']}';
             await http.delete(Uri.parse('$supabaseUrl/rest/v1/$table?$queryParam'), headers: headers);
           } else {
-            // Insert/Update in cloud
             await http.post(Uri.parse('$supabaseUrl/rest/v1/$table'), headers: headers, body: jsonEncode(data));
           }
           await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [localId]);
@@ -113,10 +115,13 @@ class DBHelper {
           List<dynamic> cloudData = jsonDecode(response.body);
           for (var cRow in cloudData) {
             Map<String, dynamic> cMap = Map<String, dynamic>.from(cRow);
-            cMap['is_synced'] = 1; // Cloud ကလာတာမို့ 1 ထားမယ်
-            cMap.remove('id'); // Cloud ID ကိုဖယ်မယ်
             
-            // Check if exists locally
+            // BUILDER 2.0 FIX: Strip out extra columns from Supabase that Local DB doesn't have
+            List<String> validCols = table == 'properties' ? validPropCols : (table == 'buyers' ? validBuyerCols : validOwnerCols);
+            cMap.removeWhere((key, value) => !validCols.contains(key));
+            
+            cMap['is_synced'] = 1; 
+            
             String checkField = table == 'properties' ? 'title' : 'name';
             var existing = await db.query(table, where: '$checkField = ?', whereArgs: [cMap[checkField]]);
             
@@ -127,7 +132,7 @@ class DBHelper {
           }
         }
       }
-      return "Sync Successful: Pushed $pushCount, Pulled $pullCount items.";
+      return "Sync Completed: $pushCount Pushed, $pullCount Pulled.";
     } catch (e) {
       return "Sync Error: $e";
     }
