@@ -244,50 +244,79 @@ class _OwnerFormState extends State<OwnerForm> {
   _save() async { if (_n.text.isEmpty) return; Map<String, dynamic> d = {'name': _n.text, 'phone': _p.text, 'remark': _rm.text}; widget.item == null ? await DBHelper.instance.insert('owners', d) : await DBHelper.instance.update('owners', d, widget.item!['id']); DBHelper.instance.syncData(); Navigator.pop(context, true); }
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Owner Form')), body: ListView(padding: const EdgeInsets.all(12), children: [TextField(controller: _n, decoration: const InputDecoration(labelText: 'Name*', border: OutlineInputBorder())), const SizedBox(height:10), TextField(controller: _p, decoration: const InputDecoration(labelText: 'Phone(s) - comma separated', border: OutlineInputBorder())), const SizedBox(height:10), TextField(controller: _rm, decoration: const InputDecoration(labelText: 'Remark', border: OutlineInputBorder())), const SizedBox(height:20), ElevatedButton(onPressed: _save, style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(15)), child: const Text('SAVE OWNER'))]));
 }
-// --- VIEWS ---
+// --- VIEWS (LISTS) ---
 class PropsView extends StatefulWidget { const PropsView({Key? key}) : super(key: key); @override _PropsViewState createState() => _PropsViewState(); }
 class _PropsViewState extends State<PropsView> {
   List<Map<String,dynamic>> _all = [], _f = []; String _cat = 'All', _sub = '';
   @override void initState() { super.initState(); _load(); }
   _load() async { final d = await DBHelper.instance.readAll('properties'); setState((){ _all = d; _filter(); }); }
-  _filter() { setState(() { if (_cat == 'All' || _sub.isEmpty) _f = _all; else if (_cat == 'Asking Price') _f = _all.where((e) => (e['asking_price']??0) <= (double.tryParse(_sub)??999999999)).toList(); else _f = _all.where((e) => e[_cat.toLowerCase().replaceAll(' ', '_')]?.toString() == _sub).toList(); }); }
-  @override Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Properties'), actions: [IconButton(icon: const Icon(Icons.add), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>const PropForm())) == true) _load(); })]),
-    body: Column(children: [
-      Padding(padding: const EdgeInsets.all(8), child: Row(children: [Expanded(child: DropdownButton<String>(isExpanded: true, value: _cat, items: ['All','Location','Asking Price','Status','House Type','Land Type'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(), onChanged: (v){setState((){_cat=v!; _sub=''; _filter();});})), const SizedBox(width:10), Expanded(child: _cat == 'All' ? const SizedBox() : (_cat == 'Asking Price' ? TextField(decoration: const InputDecoration(hintText: 'Max Price'), onChanged: (v){_sub=v; _filter();}) : DropdownButton<String>(isExpanded: true, hint: const Text('Select'), value: _sub.isEmpty?null:_sub, items: _all.map((e)=>e[_cat.toLowerCase().replaceAll(' ', '_')].toString()).toSet().where((e)=>e!='null'&&e.isNotEmpty).map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(), onChanged: (v){_sub=v!; _filter();})))]))),
-      Expanded(child: ListView.builder(itemCount: _f.length, itemBuilder: (c, i) {
-        final p = _f[i]; final imgs = (p['image_path']??'').toString().split('|').where((e)=>e.isNotEmpty).toList();
-        return Card(margin: const EdgeInsets.all(8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if(imgs.isNotEmpty) InkWell(onTap:()=>Navigator.push(context, MaterialPageRoute(builder: (_)=>ImageViewer(b64Imgs: imgs))), child: Image.memory(base64Decode(imgs[0]), height: 150, width: double.infinity, fit: BoxFit.cover)),
-          Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(p['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), color: Colors.teal, child: Text(p['status'], style: const TextStyle(color: Colors.white, fontSize: 10)))]),
-            // BUILDER 2.0 FIX: Removed Title Prefix
-            Text('${Utils.formatNum(p['asking_price'])} | ${p['location']??'-'} | ${p['land_type']??'-'}'),
-            // BUILDER 2.0 FIX: Clean Dimension Formatting
-            Text('${Utils.fmtDim(p['dim_front'])}-${Utils.fmtDim(p['dim_back'])} x ${Utils.fmtDim(p['dim_left'])}-${Utils.fmtDim(p['dim_right'])}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
-            InkWell(onTap: () async { var db = await DBHelper.instance.database; var oList = await db.query('owners', where: 'name=?', whereArgs: [p['owner_name']]); if (oList.isNotEmpty && mounted) { showDialog(context: context, builder: (_) => AlertDialog(title: Text(oList.first['name'].toString()), content: Text('📞 ${oList.first['phone']}\n📝 ${oList.first['remark']}'), actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text('OK'))])); } }, child: Text(p['owner_name']??'-', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))),
-            const Divider(),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Row(children: [Text('Upd: ${Utils.timeAgo(p['updated_at'])} | Sync: ', style: const TextStyle(fontSize: 10)), Icon(Icons.circle, size: 10, color: p['is_synced'] == 1 ? Colors.green : Colors.red)]),
-              Row(children: [IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>PropForm(item: p))) == true) _load(); }), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { await DBHelper.instance.softDelete('properties', p['id']); _load(); Utils.showUndo(context, 'properties', p['id'], _load); })])
-            ])
-          ]))
-        ]));
-      }))
-    ]);
+  _filter() {
+    setState(() {
+      if (_cat == 'All' || _sub.isEmpty) _f = _all;
+      else if (_cat == 'Asking Price') _f = _all.where((e) => (e['asking_price']??0) <= (double.tryParse(_sub)??999999999)).toList();
+      else _f = _all.where((e) => e[_cat.toLowerCase().replaceAll(' ', '_')]?.toString() == _sub).toList();
+    });
+  }
+  @override Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Properties'), actions: [IconButton(icon: const Icon(Icons.add), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>const PropForm())) == true) _load(); })]),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(children: [
+            Expanded(child: DropdownButton<String>(isExpanded: true, value: _cat, items: ['All','Location','Asking Price','Status','House Type','Land Type'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(), onChanged: (v){setState((){_cat=v!; _sub=''; _filter();});})),
+            const SizedBox(width:10),
+            Expanded(child: _cat == 'All' ? const SizedBox() : (_cat == 'Asking Price' ? TextField(decoration: const InputDecoration(hintText: 'Max Price'), onChanged: (v){_sub=v; _filter();}) : DropdownButton<String>(isExpanded: true, hint: const Text('Select'), value: _sub.isEmpty?null:_sub, items: _all.map((e)=>e[_cat.toLowerCase().replaceAll(' ', '_')].toString()).toSet().where((e)=>e!='null'&&e.isNotEmpty).map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(), onChanged: (v){_sub=v!; _filter();}))),
+          ])
+        ),
+        Expanded(child: ListView.builder(itemCount: _f.length, itemBuilder: (c, i) {
+          final p = _f[i]; final imgs = (p['image_path']??'').toString().split('|').where((e)=>e.isNotEmpty).toList();
+          return Card(margin: const EdgeInsets.all(8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if(imgs.isNotEmpty) InkWell(onTap:()=>Navigator.push(context, MaterialPageRoute(builder: (_)=>ImageViewer(b64Imgs: imgs))), child: Image.memory(base64Decode(imgs[0]), height: 150, width: double.infinity, fit: BoxFit.cover)),
+            Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(p['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), color: Colors.teal, child: Text(p['status'], style: const TextStyle(color: Colors.white, fontSize: 10)))]),
+              Text('${Utils.formatNum(p['asking_price'])} | ${p['location']??'-'} | ${p['land_type']??'-'}'),
+              Text('${Utils.fmtDim(p['dim_front'])}-${Utils.fmtDim(p['dim_back'])} x ${Utils.fmtDim(p['dim_left'])}-${Utils.fmtDim(p['dim_right'])}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+              InkWell(
+                onTap: () async { var db = await DBHelper.instance.database; var oList = await db.query('owners', where: 'name=?', whereArgs: [p['owner_name']]); if (oList.isNotEmpty && mounted) { showDialog(context: context, builder: (_) => AlertDialog(title: Text(oList.first['name'].toString()), content: Text('📞 ${oList.first['phone']}\n📝 ${oList.first['remark']}'), actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text('OK'))])); } },
+                child: Text(p['owner_name']??'-', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16))
+              ),
+              const Divider(),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Row(children: [Text('Upd: ${Utils.timeAgo(p['updated_at'])} | Sync: ', style: const TextStyle(fontSize: 10)), Icon(Icons.circle, size: 10, color: p['is_synced'] == 1 ? Colors.green : Colors.red)]),
+                Row(children: [IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>PropForm(item: p))) == true) _load(); }), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { await DBHelper.instance.softDelete('properties', p['id']); _load(); Utils.showUndo(context, 'properties', p['id'], _load); })])
+              ])
+            ]))
+          ]));
+        }))
+      ])
+    );
   }
 }
 
 class BuyersView extends StatefulWidget { const BuyersView({Key? key}) : super(key: key); @override _BuyersViewState createState() => _BuyersViewState(); }
 class _BuyersViewState extends State<BuyersView> {
-  List<Map<String,dynamic>> _all = [], _f = []; @override void initState() { super.initState(); _load(); }
+  List<Map<String,dynamic>> _all = [], _f = [];
+  @override void initState() { super.initState(); _load(); }
   _load() async { final d = await DBHelper.instance.readAll('buyers'); setState((){ _all = d; _f = d; }); }
   @override Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Buyers'), actions: [IconButton(icon: const Icon(Icons.add), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>const BuyerForm())) == true) _load(); })]),
     body: Column(children: [
       Padding(padding: const EdgeInsets.all(8), child: TextField(decoration: const InputDecoration(hintText: 'Search Min Budget...', prefixIcon: Icon(Icons.search)), keyboardType: TextInputType.number, onChanged: (v){ setState(() => _f = _all.where((e) => (e['budget']??0) >= (double.tryParse(v)??0)).toList()); })),
       Expanded(child: ListView.builder(itemCount: _f.length, itemBuilder: (c, i) {
-        final b = _f[i]; return Card(margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: ListTile(title: Text(b['name'], style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Budget: ${Utils.formatNum(b['budget'])}'), InkWell(onTap: () => Utils.dial(context, b['phone']??''), child: Text('📞 ${b['phone']}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold))), Row(children: [Text('Upd: ${Utils.timeAgo(b['updated_at'])} | Sync: ', style: const TextStyle(fontSize: 10)), Icon(Icons.circle, size: 10, color: b['is_synced'] == 1 ? Colors.green : Colors.red)])]), trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>BuyerForm(item: b))) == true) _load(); }), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { await DBHelper.instance.softDelete('buyers', b['id']); _load(); Utils.showUndo(context, 'buyers', b['id'], _load); })])));
+        final b = _f[i];
+        return Card(margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: ListTile(
+          title: Text(b['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Budget: ${Utils.formatNum(b['budget'])}'),
+            InkWell(onTap: () => Utils.dial(context, b['phone']??''), child: Text('📞 ${b['phone']}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold))),
+            Row(children: [Text('Upd: ${Utils.timeAgo(b['updated_at'])} | Sync: ', style: const TextStyle(fontSize: 10)), Icon(Icons.circle, size: 10, color: b['is_synced'] == 1 ? Colors.green : Colors.red)])
+          ]),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>BuyerForm(item: b))) == true) _load(); }),
+            IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { await DBHelper.instance.softDelete('buyers', b['id']); _load(); Utils.showUndo(context, 'buyers', b['id'], _load); })
+          ])
+        ));
       }))
     ])
   );
@@ -295,25 +324,54 @@ class _BuyersViewState extends State<BuyersView> {
 
 class OwnersView extends StatefulWidget { const OwnersView({Key? key}) : super(key: key); @override _OwnersViewState createState() => _OwnersViewState(); }
 class _OwnersViewState extends State<OwnersView> {
-  List<Map<String,dynamic>> _all = []; @override void initState() { super.initState(); _load(); }
+  List<Map<String,dynamic>> _all = [];
+  @override void initState() { super.initState(); _load(); }
   _load() async { final d = await DBHelper.instance.readAll('owners'); setState(() => _all = d); }
   @override Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Owners'), actions: [IconButton(icon: const Icon(Icons.add), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>const OwnerForm())) == true) _load(); })]),
     body: ListView.builder(itemCount: _all.length, itemBuilder: (c, i) {
-      final o = _all[i]; return Card(margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: ListTile(title: Text(o['name'], style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [InkWell(onTap: () => Utils.dial(context, o['phone']??''), child: Text('📞 ${o['phone']}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold))), Row(children: [Text('Upd: ${Utils.timeAgo(o['updated_at'])} | Sync: ', style: const TextStyle(fontSize: 10)), Icon(Icons.circle, size: 10, color: o['is_synced'] == 1 ? Colors.green : Colors.red)])]), trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>OwnerForm(item: o))) == true) _load(); }), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { await DBHelper.instance.softDelete('owners', o['id']); _load(); Utils.showUndo(context, 'owners', o['id'], _load); })])));
+      final o = _all[i];
+      return Card(margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: ListTile(
+        title: Text(o['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          InkWell(onTap: () => Utils.dial(context, o['phone']??''), child: Text('📞 ${o['phone']}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold))),
+          Row(children: [Text('Upd: ${Utils.timeAgo(o['updated_at'])} | Sync: ', style: const TextStyle(fontSize: 10)), Icon(Icons.circle, size: 10, color: o['is_synced'] == 1 ? Colors.green : Colors.red)])
+        ]),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () async { if(await Navigator.push(context, MaterialPageRoute(builder: (_)=>OwnerForm(item: o))) == true) _load(); }),
+          IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { await DBHelper.instance.softDelete('owners', o['id']); _load(); Utils.showUndo(context, 'owners', o['id'], _load); })
+        ])
+      ));
     })
   );
 }
 
 class BinView extends StatefulWidget { const BinView({Key? key}) : super(key: key); @override _BinViewState createState() => _BinViewState(); }
 class _BinViewState extends State<BinView> {
-  List<Map<String,dynamic>> _items = []; @override void initState() { super.initState(); _load(); }
-  _load() async { List<Map<String,dynamic>> all = []; for(String t in ['properties','buyers','owners']) { var d = await DBHelper.instance.readAll(t, isDeleted: 1); all.addAll(d.map((e) => {...e, '_table': t})); } setState(() => _items = all); }
+  List<Map<String,dynamic>> _items = [];
+  @override void initState() { super.initState(); _load(); }
+  _load() async {
+    List<Map<String,dynamic>> all = [];
+    for(String t in ['properties','buyers','owners']) {
+      var d = await DBHelper.instance.readAll(t, isDeleted: 1);
+      all.addAll(d.map((e) => {...e, '_table': t}));
+    }
+    setState(() => _items = all);
+  }
   @override Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Recycle Bin (Trash)'), backgroundColor: Colors.redAccent),
     body: _items.isEmpty ? const Center(child: Text('Bin is empty.')) : ListView.builder(itemCount: _items.length, itemBuilder: (c, i) {
       final item = _items[i]; final t = item['_table']; final name = item['title'] ?? item['name'];
-      return ListTile(leading: const Icon(Icons.delete_outline, color: Colors.red), title: Text('[$t] $name'), subtitle: Text('Del: ${Utils.timeAgo(item['updated_at'])}'), trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.restore, color: Colors.green), onPressed: () async { await DBHelper.instance.restore(t, item['id']); _load(); }), IconButton(icon: const Icon(Icons.delete_forever, color: Colors.black), onPressed: () async { await DBHelper.instance.hardDelete(t, item['id'], item); _load(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permanently deleted (Cloud & Local)'))); })]));
+      return ListTile(
+        leading: const Icon(Icons.delete_outline, color: Colors.red), title: Text('[$t] $name'), subtitle: Text('Del: ${Utils.timeAgo(item['updated_at'])}'),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(icon: const Icon(Icons.restore, color: Colors.green), onPressed: () async { await DBHelper.instance.restore(t, item['id']); _load(); }),
+          IconButton(icon: const Icon(Icons.delete_forever, color: Colors.black), onPressed: () async { 
+            await DBHelper.instance.hardDelete(t, item['id'], item); _load(); 
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permanently deleted (Cloud & Local)')));
+          })
+        ])
+      );
     })
   );
 }
@@ -323,12 +381,38 @@ class SettingsView extends StatelessWidget {
   @override Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Settings')),
     body: ListView(children: [
-      ListTile(leading: const Icon(Icons.cloud_sync, color: Colors.blue), title: const Text('Cloud Sync'), onTap: () async { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Syncing...'))); String r = await DBHelper.instance.syncData(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r))); }), const Divider(),
-      ListTile(leading: const Icon(Icons.download, color: Colors.green), title: const Text('Backup JSON (Local)'), onTap: () async { String r = await DBHelper.instance.exportJson(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r))); }),
-      ListTile(leading: const Icon(Icons.upload, color: Colors.orange), title: const Text('Restore JSON (Local)'), onTap: () async { Directory? dir = await getExternalStorageDirectory(); if (dir == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage Error'))); return; } File f = File('${dir.path}/tkr_backup.json'); if (await f.exists()) { String r = await DBHelper.instance.importJson(await f.readAsString()); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r))); } else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No backup found in storage.'))); } }), const Divider(),
-      ListTile(leading: const Icon(Icons.lock), title: const Text('Change Password'), onTap: () { TextEditingController op = TextEditingController(), np = TextEditingController(); showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Change Password'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: op, obscureText: true, decoration: const InputDecoration(labelText: 'Old Pass')), TextField(controller: np, obscureText: true, decoration: const InputDecoration(labelText: 'New Pass'))]), actions: [TextButton(onPressed: () async { SharedPreferences prefs = await SharedPreferences.getInstance(); String savedP = prefs.getString('pass') ?? sha256.convert(utf8.encode('1478963')).toString(); if (sha256.convert(utf8.encode(op.text)).toString() == savedP) { prefs.setString('pass', sha256.convert(utf8.encode(np.text)).toString()); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed'))); } else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Old password wrong'))); } }, child: const Text('SAVE'))])); }), const Divider(),
-      ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('Logout', style: TextStyle(color: Colors.red)), onTap: () async { SharedPreferences p = await SharedPreferences.getInstance(); p.setBool('isLog', false); Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const Login())); })
+      ListTile(leading: const Icon(Icons.cloud_sync, color: Colors.blue), title: const Text('Cloud Sync'), onTap: () async {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Syncing...')));
+        String r = await DBHelper.instance.syncData(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r)));
+      }), const Divider(),
+      ListTile(leading: const Icon(Icons.download, color: Colors.green), title: const Text('Backup JSON (Local)'), onTap: () async {
+        String r = await DBHelper.instance.exportJson(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r)));
+      }),
+      ListTile(leading: const Icon(Icons.upload, color: Colors.orange), title: const Text('Restore JSON (Local)'), onTap: () async {
+        Directory? dir = await getExternalStorageDirectory(); 
+        if (dir == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage Error'))); return; }
+        File f = File('${dir.path}/tkr_backup.json');
+        if (await f.exists()) { String r = await DBHelper.instance.importJson(await f.readAsString()); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r))); }
+        else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No backup found in storage.'))); }
+      }), const Divider(),
+      ListTile(leading: const Icon(Icons.lock), title: const Text('Change Password'), onTap: () {
+        TextEditingController op = TextEditingController(), np = TextEditingController();
+        showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Change Password'), content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: op, obscureText: true, decoration: const InputDecoration(labelText: 'Old Pass')),
+          TextField(controller: np, obscureText: true, decoration: const InputDecoration(labelText: 'New Pass'))
+        ]), actions: [TextButton(onPressed: () async {
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          String savedP = prefs.getString('pass') ?? sha256.convert(utf8.encode('1478963')).toString();
+          if (sha256.convert(utf8.encode(op.text)).toString() == savedP) {
+            prefs.setString('pass', sha256.convert(utf8.encode(np.text)).toString());
+            Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed')));
+          } else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Old password wrong'))); }
+        }, child: const Text('SAVE'))]));
+      }), const Divider(),
+      ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text('Logout', style: TextStyle(color: Colors.red)), onTap: () async {
+        SharedPreferences p = await SharedPreferences.getInstance(); p.setBool('isLog', false);
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const Login()));
+      })
     ])
   );
 }
-    
