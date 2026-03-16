@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart'; // BUILDER 2.0 FIXED: Missing import added
 import 'db_helper.dart';
 
 void main() async {
@@ -210,8 +211,8 @@ class _PropFormState extends State<PropForm> {
       final i = widget.item!;
       _t.text = i['title'] ?? ''; _pType = i['property_type'] ?? 'အိမ်'; _hType = i['house_type'] ?? '';
       _lType = i['land_type'] ?? ''; _oName = i['owner_name'] ?? ''; _df.text = (i['dim_front'] ?? '').toString();
-      _db.text = (i['dim_back'] ?? '').toString(); _ds.text = (i['dim_left'] ?? '').toString(); // Left = South
-      _dn.text = (i['dim_right'] ?? '').toString(); // Right = North
+      _db.text = (i['dim_back'] ?? '').toString(); _ds.text = (i['dim_left'] ?? '').toString(); 
+      _dn.text = (i['dim_right'] ?? '').toString(); 
       _st = i['status'] ?? 'Available'; _ap.text = (i['asking_price'] ?? '').toString(); _bp.text = (i['bottom_price'] ?? '').toString();
       _loc = i['location'] ?? ''; _ml.text = i['map_link'] ?? ''; _rm.text = i['remark'] ?? '';
       _imgs = (i['image_path'] ?? '').toString().split('|').where((e) => e.isNotEmpty).toList();
@@ -304,4 +305,4 @@ class _OwnerFormState extends State<OwnerForm> {
     Navigator.pop(context, true);
   }
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Owner Form')), body: ListView(padding: const EdgeInsets.all(12), children: [
-    TextField(controller: _n, decoration: const InputDecoration(labelText: 'Name*', border: OutlineInputBorder())), const SizedBox(h
+    TextField(controller: _n, decoration: const InputDecoration(label
