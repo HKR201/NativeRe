@@ -188,7 +188,7 @@ class _OwnerAutoState extends State<OwnerAutocomplete> {
       onSelected: (s) => widget.onSelected(s),
       fieldViewBuilder: (ctx, c, f, onS) {
         c.addListener(() { widget.onSelected(c.text); });
-        return TextField(controller: c, focusNode: f, decoration: InputDecoration(labelText: 'Owner Name (Auto-add if new)', border: const OutlineInputBorder(), isDense: true, suffixIcon: IconButton(icon: const Icon(Icons.add), onPressed: (){})));
+        return TextField(controller: c, focusNode: f, decoration: InputDecoration(labelText: 'Owner Name (Auto-add)', border: const OutlineInputBorder(), isDense: true, suffixIcon: IconButton(icon: const Icon(Icons.add), onPressed: (){})));
       },
     );
   }
@@ -287,7 +287,8 @@ class _BuyerFormState extends State<BuyerForm> {
     TextField(controller: _r, decoration: const InputDecoration(labelText: 'Requirement', border: OutlineInputBorder())), const SizedBox(height:10),
     TextField(controller: _l, decoration: const InputDecoration(labelText: 'Location', border: OutlineInputBorder())), const SizedBox(height:10),
     TextField(controller: _rm, decoration: const InputDecoration(labelText: 'Remark', border: OutlineInputBorder())), const SizedBox(height:20),
-    ElevatedButton(onPressed: _save, child: const Text('SAVE BUYER', style: TextStyle(padding: EdgeInsets.all(15))))
+    // BUILDER 2.0 FIX: Removed padding inside Text style, moved to ElevatedButton.styleFrom
+    ElevatedButton(onPressed: _save, style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(15)), child: const Text('SAVE BUYER'))
   ]));
 }
 
@@ -305,4 +306,4 @@ class _OwnerFormState extends State<OwnerForm> {
     Navigator.pop(context, true);
   }
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Owner Form')), body: ListView(padding: const EdgeInsets.all(12), children: [
-    TextField(controller: _n, decoration: const InputDecoration(labelText: 'Name*', border: OutlineInputBorder
+   
