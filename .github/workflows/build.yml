@@ -24,14 +24,14 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
-      - name: Builder 2.0 Smart Injector & Permission Fix
+      - name: Builder 2.0 Smart Injector (Perl Fix)
         run: |
           flutter create tkr_erp
           cp pubspec.yaml tkr_erp/
           rm -rf tkr_erp/lib
           cp -r lib tkr_erp/
-          # SAFE MANIFEST INJECTION
-          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>\n    <application/g' tkr_erp/android/app/src/main/AndroidManifest.xml
+          # BUILDER 2.0 FIX: Used Perl instead of Sed to prevent XML Corruption
+          perl -pi -e 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>\n    <application/g' tkr_erp/android/app/src/main/AndroidManifest.xml
 
       - name: Get Dependencies
         working-directory: ./tkr_erp
