@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allow manual trigger (Button နှိပ်ပြီး Build လုပ်နိုင်ရန်)
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,18 +24,15 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
-      - name: Builder 2.0 Smart Injector (Generate Android Wrapper)
+      - name: Builder 2.0 Smart Injector & Permission Fix
         run: |
-          # ၁။ Cloud ပေါ်တွင် Flutter Project အခွံအသစ် တည်ဆောက်ခြင်း
           flutter create tkr_erp
-          
-          # ၂။ သင့်၏ pubspec.yaml ဖြင့် အစားထိုးခြင်း
           cp pubspec.yaml tkr_erp/
-          
-          # ၃။ Default Code များကိုဖျက်၍ သင့်၏ lib ဖိုင်များဖြင့် အစားထိုးခြင်း
           rm -rf tkr_erp/lib
           cp -r lib tkr_erp/
-          
+          # FORCE INJECT INTERNET PERMISSION FOR CHINA ROM
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' tkr_erp/android/app/src/main/AndroidManifest.xml
+
       - name: Get Dependencies
         working-directory: ./tkr_erp
         run: flutter pub get
