@@ -38,35 +38,14 @@ class DBHelper {
   }
 
   Future _createDB(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE properties (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, property_type TEXT, owner_name TEXT, 
-        land_type TEXT, house_type TEXT, dim_front REAL, dim_back REAL, dim_left REAL, dim_right REAL,
-        status TEXT, asking_price REAL, bottom_price REAL, location TEXT, map_link TEXT, 
-        image_path TEXT, remark TEXT, is_synced INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE buyers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, phone TEXT, budget REAL, 
-        requirement TEXT, location TEXT, remark TEXT, is_synced INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE owners (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, phone TEXT, remark TEXT, 
-        is_synced INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    ''');
+    await db.execute('''CREATE TABLE properties (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, property_type TEXT, owner_name TEXT, land_type TEXT, house_type TEXT, dim_front REAL, dim_back REAL, dim_left REAL, dim_right REAL, status TEXT, asking_price REAL, bottom_price REAL, location TEXT, map_link TEXT, image_path TEXT, remark TEXT, is_synced INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)''');
+    await db.execute('''CREATE TABLE buyers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, phone TEXT, budget REAL, requirement TEXT, location TEXT, remark TEXT, is_synced INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)''');
+    await db.execute('''CREATE TABLE owners (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, phone TEXT, remark TEXT, is_synced INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)''');
   }
 
-  // --- Core CRUD ---
   Future<int> insert(String table, Map<String, dynamic> data) async {
     final db = await instance.database;
-    data['is_synced'] = 0;
-    data['updated_at'] = DateTime.now().toIso8601String();
+    data['is_synced'] = 0; data['updated_at'] = DateTime.now().toIso8601String();
     return await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -77,71 +56,46 @@ class DBHelper {
 
   Future<int> update(String table, Map<String, dynamic> data, int id) async {
     final db = await instance.database;
-    data['is_synced'] = 0;
-    data['updated_at'] = DateTime.now().toIso8601String();
+    data['is_synced'] = 0; data['updated_at'] = DateTime.now().toIso8601String();
     return await db.update(table, data, where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<int> softDelete(String table, int id) async {
-    return await update(table, {'is_deleted': 1}, id);
-  }
+  Future<int> softDelete(String table, int id) async => await update(table, {'is_deleted': 1}, id);
+  Future<int> restore(String table, int id) async => await update(table, {'is_deleted': 0}, id);
 
-  Future<int> restore(String table, int id) async {
-    return await update(table, {'is_deleted': 0}, id);
-  }
-
-  // --- HARD DELETE (Recycle Bin to Cloud) ---
   Future<void> hardDelete(String table, int id, Map<String, dynamic> data) async {
     final db = await instance.database;
     final headers = {'apikey': supabaseKey, 'Authorization': 'Bearer $supabaseKey'};
-    
-    // 1. Delete from Cloud first
     String queryParam = table == 'properties' ? 'title=eq.${data['title']}' : 'name=eq.${data['name']}';
     await http.delete(Uri.parse('$supabaseUrl/rest/v1/$table?$queryParam'), headers: headers);
-    
-    // 2. Delete Locally
     await db.delete(table, where: 'id = ?', whereArgs: [id]);
   }
 
-  // --- DYNAMIC DROPDOWN EXTRACTOR ---
   Future<List<String>> getUniqueValues(String table, String column) async {
     final db = await instance.database;
     final result = await db.rawQuery('SELECT DISTINCT $column FROM $table WHERE is_deleted=0 AND $column IS NOT NULL AND $column != ""');
     return result.map((e) => e[column].toString()).toList();
   }
 
-  // --- JSON BACKUP / RESTORE ---
   Future<String> exportJson() async {
     try {
-      final db = await instance.database;
-      Map<String, dynamic> backup = {};
-      for (String table in ['properties', 'buyers', 'owners']) {
-        backup[table] = await db.query(table);
-      }
-      Directory? dir = await getExternalStorageDirectory();
-      File file = File('${dir!.path}/tkr_backup.json');
-      await file.writeAsString(jsonEncode(backup));
-      return 'Backup Saved to: ${file.path}';
+      final db = await instance.database; Map<String, dynamic> backup = {};
+      for (String table in ['properties', 'buyers', 'owners']) backup[table] = await db.query(table);
+      Directory? dir = await getExternalStorageDirectory(); File file = File('${dir!.path}/tkr_backup.json');
+      await file.writeAsString(jsonEncode(backup)); return 'Backup Saved to: ${file.path}';
     } catch (e) { return 'Backup Error: $e'; }
   }
 
   Future<String> importJson(String jsonString) async {
     try {
-      final db = await instance.database;
-      Map<String, dynamic> data = jsonDecode(jsonString);
+      final db = await instance.database; Map<String, dynamic> data = jsonDecode(jsonString);
       for (String table in ['properties', 'buyers', 'owners']) {
-        if (data.containsKey(table)) {
-          await db.delete(table); // Clear existing
-          for (var row in data[table]) {
-            await db.insert(table, Map<String, dynamic>.from(row));
-          }
-        }
+        if (data.containsKey(table)) { await db.delete(table); for (var row in data[table]) await db.insert(table, Map<String, dynamic>.from(row)); }
       }
       return 'Restore Successful!';
     } catch (e) { return 'Restore Error: $e'; }
   }
 
-  // --- SUPABASE SYNC LOGIC ---
   Future<String> syncData() async {
     try {
       final db = await instance.database;
@@ -150,25 +104,24 @@ class DBHelper {
       int pushCount = 0; int pullCount = 0;
 
       for (String table in tables) {
-        // PUSH
         final unsynced = await db.query(table, where: 'is_synced = ?', whereArgs: [0]);
         for (var row in unsynced) {
           Map<String, dynamic> data = Map.from(row);
-          int localId = data.remove('id');
-          int isDeleted = data['is_deleted'] ?? 0;
-          data.remove('is_synced');
-
+          int localId = data.remove('id'); int isDeleted = data['is_deleted'] ?? 0; data.remove('is_synced');
+          http.Response res;
           if (isDeleted == 1) {
             String queryParam = table == 'properties' ? 'title=eq.${data['title']}' : 'name=eq.${data['name']}';
-            await http.delete(Uri.parse('$supabaseUrl/rest/v1/$table?$queryParam'), headers: headers);
+            res = await http.delete(Uri.parse('$supabaseUrl/rest/v1/$table?$queryParam'), headers: headers);
           } else {
-            await http.post(Uri.parse('$supabaseUrl/rest/v1/$table'), headers: headers, body: jsonEncode(data));
+            res = await http.post(Uri.parse('$supabaseUrl/rest/v1/$table'), headers: headers, body: jsonEncode(data));
           }
-          await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [localId]);
-          pushCount++;
+          // BUILDER 2.0 FIX: Only mark green if Cloud accepted it!
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [localId]);
+            pushCount++;
+          }
         }
 
-        // PULL
         final response = await http.get(Uri.parse('$supabaseUrl/rest/v1/$table'), headers: headers);
         if (response.statusCode == 200) {
           List<dynamic> cloudData = jsonDecode(response.body);
@@ -177,21 +130,14 @@ class DBHelper {
             List<String> validCols = table == 'properties' ? validPropCols : (table == 'buyers' ? validBuyerCols : validOwnerCols);
             cMap.removeWhere((key, value) => !validCols.contains(key));
             cMap['is_synced'] = 1;
-            
             String checkField = table == 'properties' ? 'title' : 'name';
             var existing = await db.query(table, where: '$checkField = ?', whereArgs: [cMap[checkField]]);
-            
-            if (existing.isEmpty) {
-              await db.insert(table, cMap);
-              pullCount++;
-            } else {
-               // Update local if cloud has newer data based on ID
-               await db.update(table, cMap, where: '$checkField = ?', whereArgs: [cMap[checkField]]);
-            }
+            if (existing.isEmpty) { await db.insert(table, cMap); pullCount++; } 
+            else { await db.update(table, cMap, where: '$checkField = ?', whereArgs: [cMap[checkField]]); }
           }
         }
       }
-      return "Sync Completed: $pushCount Pushed, $pullCount Pulled.";
+      return "Sync: $pushCount Pushed, $pullCount Pulled.";
     } catch (e) { return "Sync Error: $e"; }
   }
 }
